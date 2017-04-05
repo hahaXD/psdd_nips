@@ -16,6 +16,7 @@ public:
     ~VtreeManager();
     VtreeManager(const VtreeManager& other);
     void read_vtree_file(const char* vtree_file);
+    void write_vtree_file(const char* vtree_file);
     void write_dot_file(const char* dot_file);
     void generate_rl_vtree(const std::vector<int>& var_order);
     void generate_random_vtree (size_t var_size, unsigned int seed);
@@ -24,6 +25,7 @@ public:
     size_t get_var_size() const;
     size_t get_vtree_size() const;
     bool check_decision_path(const std::vector<size_t>& var_order) const;
+    //serialize the vtree. The first element is the leaf, the last element is the root. children appears before parent.
     std::vector<Vtree*> serialize() const;
     static Vtree* get_lca(Vtree* a, Vtree* b, Vtree* root);
     size_t get_depth() const;

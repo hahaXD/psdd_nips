@@ -11,14 +11,18 @@
 
 class PsddManager{
 public:
-    PsddManager(VtreeManager* vm);
+    void init_by_vtree_manager(VtreeManager* vm);
+    void init_by_vtree_file(const char* vtree_file);
     void inc_ref(PsddNode* node);
     void dec_ref(PsddNode* node);
-    PsddNode* create_unique_decn_node(Vtree* v, size_t element_size, PsddNode** elements, PsddParameter* param);
+    PsddNode* read_psdd_file(const char* psdd_file);
+    static void write_psdd_file(PsddNode* root, size_t var_size, const char* psdd_file);
+    static std::vector<PsddNode*> serialize(PsddNode* root);
+    PsddNode* create_unique_decn_node(Vtree* v, std::vector<PsddElement>& elements);
     PsddNode* create_unique_literal_node(Vtree* v, size_t var_index, bool lit_sign);
     PsddNode* create_unique_simple_node(Vtree* v, size_t var_index, PsddParameter pos_param, PsddParameter neg_param);
-    //PsddNode* multiply(PsddNode* node1, PsddNode* node2);
-
+    std::pair<PsddNode*,PsddParameter> multiply(PsddNode* node1, PsddNode* node2);
+    void gc_manual();
     VtreeManager* get_vtree_manager() const;
 private:
     PsddUniqueTable m_put;
