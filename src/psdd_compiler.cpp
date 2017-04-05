@@ -194,22 +194,44 @@ std::pair<PsddNode *, PsddParameter> PsddCompiler::compile_network(size_t gc_fre
     for (auto i = 0; i < factor_size; i++){
         auto compiled_cluster = compile_cluster(i);
         nodes.push_back(compiled_cluster.first);
+        m_pm->inc_ref(compiled_cluster.first);
         z = z * compiled_cluster.second;
     }
-    std::sort(nodes.begin(), nodes.end(), compare_psdd_node_by_vtree_inorder);
-    PsddNode* result = nodes[0];
-    for (auto i = nodes.begin()+1; i != nodes.end(); i++){
-        std::cout << i-nodes.begin() << std::endl;
-        auto mult_result = m_pm->multiply(result, *i);
-        z = z * mult_result.second;
-        result = mult_result.first;
-        if (((i-nodes.begin()) % gc_freq )== 0){
-            m_pm->inc_ref(result);
-            m_pm->gc_manual();
-            m_pm->dec_ref(result);
+    std::vector<std::vector<PsddNode* > > mult_pool (m_pm->get_vtree_manager()->get_vtree_size());
+    for (auto i = nodes.begin(); i != nodes.end(); i++){
+        mult_pool[(*i)->get_vtree()->get_index()].push_back(*i);
+    }
+    std::vector<Vtree* > v_nodes_serialized = m_pm->get_vtree_manager()->serialize();
+    size_t mult_acc = 1;
+    PsddNode* final_result = nullptr;
+    for (auto i = v_nodes_serialized.begin(); i != v_nodes_serialized.end(); i++){
+        Vtree* cur = *i;
+        const std::vector<PsddNode*>& to_mult = mult_pool[cur->get_index()];
+        if (to_mult.size() == 0){
+            continue;
+        }else{
+            PsddNode* result = to_mult[0];
+            for (auto j = to_mult.begin()+1; j != to_mult.end(); j++){
+                auto mult_result = m_pm->multiply(result, (*j));
+                mult_acc +=1;
+                m_pm->dec_ref(result);
+                m_pm->dec_ref(*j);
+                m_pm->inc_ref(mult_result.first);
+                z = z* mult_result.second;
+                result = mult_result.first;
+                if ((mult_acc%gc_freq)== 0){
+                    m_pm->gc_manual();
+                }
+            }
+            if (cur->get_parent() == nullptr){
+                // cur is the root;
+                final_result = result;
+            }else{
+                mult_pool[cur->get_parent()->get_index()].push_back(result);
+            }
         }
     }
-    return {result, z};
+    return {final_result, z};
 }
 
 PsddManager *PsddCompiler::get_psdd_manager() const {
