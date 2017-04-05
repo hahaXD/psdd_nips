@@ -5,7 +5,7 @@
 #include "psdd_node.hpp"
 
 PsddNode::PsddNode(size_t node_index, Vtree *v, char node_type):m_index(node_index), m_vtree(v), m_type(node_type),
-                                                                m_hash_val(0),m_elements(nullptr), m_params(nullptr),
+                                                                m_hash_val(0),m_elements(),
                                                                 m_pos_param(PsddParameter::get_from_log(0)),
                                                                 m_neg_param(PsddParameter::get_from_log(0)),
                                                                 m_var_lit(false){}
@@ -22,28 +22,12 @@ char PsddNode::get_type() const {
     return m_type;
 }
 
-void PsddNode::set_decn_node(size_t element_size, PsddNode **node_element, PsddParameter *params){
-    m_elements = node_element;
-    m_size = element_size;
-    m_params = params;
-    m_hash_val = 0;
-    for (auto i = 0 ; i < element_size; i++){
-        m_hash_val = (std::hash<size_t>()((size_t)node_element[2*i]) >> i);
-        m_hash_val ^= (std::hash<size_t>()((size_t)node_element[2*i+1]) >>i);
-        m_hash_val ^=  node_element[i]->get_hash_value();
-    }
-}
-
-PsddNode **PsddNode::get_elements() const {
+const std::vector<PsddElement>& PsddNode::get_elements() const {
     return m_elements;
 }
 
-PsddParameter *PsddNode::get_params() const {
-    return m_params;
-}
-
 size_t PsddNode::get_size() const {
-    return m_size;
+    return m_elements.size();
 }
 
 
@@ -59,14 +43,7 @@ PsddParameter PsddNode::get_neg_param() const {
     return m_neg_param;
 }
 
-PsddNode::~PsddNode() {
-    if (m_elements){
-        delete m_elements;
-    }
-    if (m_params){
-        delete m_params;
-    }
-}
+PsddNode::~PsddNode() {}
 
 size_t PsddNode::get_hash_value() const {
     return m_hash_val;
@@ -87,21 +64,7 @@ bool PsddNode::operator==(const PsddNode &other) const{
         return (m_pos_param == other.m_pos_param);
     }else{
         // decn node
-        if (other.m_size != m_size){
-            return false;
-        }
-        for (size_t i = 0; i< m_size; i++){
-            if (m_elements[2*i] != other.m_elements[2*i]){
-                return false;
-            }
-            if (m_elements[2*i+1] != other.m_elements[2*i+1]){
-                return false;
-            }
-            if (m_params[i] != other.m_params[i]){
-                return false;
-            }
-        }
-        return true;
+        return m_elements == other.m_elements;
     }
 }
 
@@ -120,6 +83,17 @@ void PsddNode::set_literal_node(size_t var_index, bool lit_sign) {
         m_hash_val = std::hash<size_t>()(1001);
     }
     m_var_lit = lit_sign;
+}
+
+bool PsddNode::get_literal_sign() const {
+    return m_var_lit;
+}
+
+void PsddNode::set_decn_node(const std::vector<PsddElement> &elements) {
+    m_elements = elements;
+    for (auto i = m_elements.begin(); i != m_elements.end(); i++){
+        m_hash_val^= i->get_hash_value();
+    }
 }
 
 

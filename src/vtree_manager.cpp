@@ -354,5 +354,29 @@ void VtreeManager::swap(Vtree *v) {
     set_inorder_index(m_root);
 }
 
+void VtreeManager::write_vtree_file(const char *vtree_file) {
+    std::ofstream vtree_fd;
+    vtree_fd.open(vtree_file);
+    std::vector<Vtree*> serialized_vtree = serialize();
+    vtree_fd << "c ids of vtree nodes start at 0" << std::endl;
+    vtree_fd << "c ids of variables start at 1" << std::endl;
+    vtree_fd << "c vtree nodes appear bottom-up, children before parents" << std::endl;
+    vtree_fd << "c file syntax:" <<std::endl;
+    vtree_fd << "c vtree number-of-nodes-in-vtree" << std::endl;
+    vtree_fd << "c L id-of-leaf-vtree-node id-of-variable" << std::endl;
+    vtree_fd << "c id-of-internal-vtree-node id-of-left-child id-of-right-child" << std::endl;
+    vtree_fd << "vtree "<< m_vtree_size << std::endl;
+    for (auto i = serialized_vtree.begin(); i != serialized_vtree.end(); i ++){
+        Vtree * cur = *i;
+        if (cur->get_left() == nullptr){
+            vtree_fd << "L "<< cur->get_index() << " " << cur->get_var_index() << std::endl;
+        }else{
+            vtree_fd << "I " << cur->get_index() << " " << cur->get_left()->get_index() << " "
+                     << cur->get_right()->get_index() << std::endl;
+        }
+    }
+    vtree_fd.close();
+}
+
 
 

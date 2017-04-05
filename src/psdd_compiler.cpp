@@ -6,6 +6,10 @@
 #include <vector>
 #include <algorithm>
 #include <cstddef>
+#include <string>
+#include <unistd.h>
+#include <fstream>
+#include <iostream>
 #include "psdd_compiler.hpp"
 
 PsddCompiler::PsddCompiler():m_network(nullptr),m_pm(nullptr) {}
@@ -36,7 +40,7 @@ std::pair<PsddNode*, PsddParameter> PsddCompiler::compile_cluster(size_t cluster
             }
         }
     }
-    assert(var_location_in_cluster.size() == ordered_cluster_variables.end());
+    assert(var_location_in_cluster.size() == ordered_cluster_variables.size());
     std::unordered_map<std::size_t, PsddNode*>* context_node_cache =
             new std::unordered_map<std::size_t, PsddNode*> ();
     std::unordered_map<std::size_t, PsddParameter>* context_norm_cache =
@@ -79,7 +83,7 @@ std::pair<PsddNode*, PsddParameter> PsddCompiler::compile_cluster(size_t cluster
         mask = (size_t) ((~0x0) ^(1 << cond_var_location));
         for (auto p = context_node_cache->begin(); p != context_node_cache->end(); p++){
             size_t last_context = p->first;
-            size_t next_context = last_context ^ mask;
+            size_t next_context = last_context & mask;
             if (context_node_cache_out->find(next_context) != context_node_cache_out->end()){
                 continue;
             }
@@ -91,36 +95,27 @@ std::pair<PsddNode*, PsddParameter> PsddCompiler::compile_cluster(size_t cluster
                 context_norm_cache_out->insert({next_context, zero_param});
             }else if (pos_param == zero_param){
                 PsddNode* neg_lit = m_pm->create_unique_literal_node(*k,(*k)->get_var_index(), false);
-                PsddNode** elements = new PsddNode*[2];
-                elements[0] = neg_lit;
-                elements[1] = context_node_cache->at(next_context);
-                PsddParameter* params = new PsddParameter[1];
-                params[0] = PsddParameter::get_from_regular(1);
-                PsddNode* next_node = m_pm->create_unique_decn_node((*k)->get_parent(),1,elements, params);
+                std::vector<PsddElement> elements;
+                elements.push_back(PsddElement(neg_lit, context_node_cache->at(next_context), PsddParameter::get_from_regular(1)));
+                PsddNode* next_node = m_pm->create_unique_decn_node((*k)->get_parent(),elements);
                 context_node_cache_out->insert({next_context, next_node});
                 context_norm_cache_out->insert({next_context, neg_param});
             }else if (neg_param == zero_param){
                 PsddNode* pos_lit = m_pm->create_unique_literal_node(*k,(*k)->get_var_index(), true);
-                PsddNode** elements = new PsddNode*[2];
-                elements[0] = pos_lit;
-                elements[1] = context_node_cache->at(next_context| (1<<cond_var_location));
-                PsddParameter* params = new PsddParameter[1];
-                params[0] = PsddParameter::get_from_regular(1);
-                PsddNode* next_node = m_pm->create_unique_decn_node((*k)->get_parent(),1,elements, params);
+                std::vector<PsddElement> elements;
+                elements.push_back(PsddElement(pos_lit, context_node_cache->at(next_context | (1<<cond_var_location)),
+                                               PsddParameter::get_from_regular(1)));
+                PsddNode* next_node = m_pm->create_unique_decn_node((*k)->get_parent(),elements);
                 context_node_cache_out->insert({next_context, next_node});
                 context_norm_cache_out->insert({next_context, pos_param});
             }else{
                 PsddNode* pos_lit = m_pm -> create_unique_literal_node((*k), (*k)->get_var_index(), true);
                 PsddNode* neg_lit = m_pm -> create_unique_literal_node((*k), (*k)->get_var_index(), false);
-                PsddNode** elements = new PsddNode* [4];
-                elements[0] = pos_lit;
-                elements[1] = context_node_cache->at(next_context| (1<<cond_var_location));
-                elements[2] = neg_lit;
-                elements[3] = context_node_cache->at(next_context);
-                PsddParameter* params = new PsddParameter[2];
-                params[0] = pos_param/new_norm;
-                params[1] = neg_param/new_norm;
-                PsddNode* next_node = m_pm -> create_unique_decn_node((*k)->get_parent(), 2, elements, params);
+                std::vector<PsddElement> elements;
+                elements.push_back(PsddElement(pos_lit, context_node_cache->at(next_context| (1<<cond_var_location)),
+                                               pos_param/new_norm));
+                elements.push_back(PsddElement(neg_lit,context_node_cache->at(next_context),neg_param/new_norm));
+                PsddNode* next_node = m_pm -> create_unique_decn_node((*k)->get_parent(), elements);
                 context_node_cache_out->insert({next_context, next_node});
                 context_norm_cache_out->insert({next_context, new_norm});
             }
@@ -146,5 +141,78 @@ void PsddCompiler::read_uai_file(const char *uai_file) {
     assert(m_network == nullptr);
     m_network = new UaiNetwork();
     m_network->read_file(uai_file);
+}
+
+
+void PsddCompiler::init_psdd_manager(char mode) {
+    std::string pid_affix = std::to_string(getpid());
+    char cnf_name[100];
+    char vtree_name[100];
+    char cmd[1000];
+    cnf_name[0] = '\0';
+    vtree_name[0] = '\0';
+    cmd[0] = '\0';
+    sprintf(cnf_name, "/tmp/uai_%s.cnf", pid_affix.c_str());
+    sprintf(vtree_name, "/tmp/uai_%s.vtree", pid_affix.c_str());
+    sprintf(cmd, "./miniC2D -c %s -m %d -o %s > /dev/null 2>&1", cnf_name, mode, vtree_name);
+
+    std::string content = "";
+    content +=
+            "p cnf " + std::to_string(m_network->get_var_size()) + " " + std::to_string(m_network->get_factor_size()) +
+            "\n";
+    auto ordered_clusters = m_network->get_clusters();
+    for (auto k = ordered_clusters.begin(); k != ordered_clusters.end(); k++) {
+        for (auto p = k->begin(); p != k->end(); p++) {
+            content += std::to_string(*p) + " ";
+        }
+        content += "0\n";
+    }
+    std::ofstream cnf_file;
+    cnf_file.open(cnf_name);
+    cnf_file << content;
+    cnf_file.close();
+    system(cmd);
+    m_pm = new PsddManager();
+    m_pm->init_by_vtree_file(vtree_name);
+    std::remove(vtree_name);
+    std::remove(cnf_name);
+}
+
+void PsddCompiler::init_psdd_manager_using_vtree_manager(VtreeManager *v) {
+    m_pm = new PsddManager();
+    m_pm->init_by_vtree_manager(v);
+}
+
+bool compare_psdd_node_by_vtree_inorder(const PsddNode* p1, const PsddNode* p2){
+    return (p1->get_vtree()->get_inorder_index() > p2->get_vtree()->get_inorder_index());
+}
+
+std::pair<PsddNode *, PsddParameter> PsddCompiler::compile_network(size_t gc_freq) {
+    std::vector<PsddNode*> nodes;
+    PsddParameter z = PsddParameter::get_from_regular(1);
+    auto factor_size = m_network->get_factor_size();
+    for (auto i = 0; i < factor_size; i++){
+        auto compiled_cluster = compile_cluster(i);
+        nodes.push_back(compiled_cluster.first);
+        z = z * compiled_cluster.second;
+    }
+    std::sort(nodes.begin(), nodes.end(), compare_psdd_node_by_vtree_inorder);
+    PsddNode* result = nodes[0];
+    for (auto i = nodes.begin()+1; i != nodes.end(); i++){
+        std::cout << i-nodes.begin() << std::endl;
+        auto mult_result = m_pm->multiply(result, *i);
+        z = z * mult_result.second;
+        result = mult_result.first;
+        if (((i-nodes.begin()) % gc_freq )== 0){
+            m_pm->inc_ref(result);
+            m_pm->gc_manual();
+            m_pm->dec_ref(result);
+        }
+    }
+    return {result, z};
+}
+
+PsddManager *PsddCompiler::get_psdd_manager() const {
+    return m_pm;
 }
 

@@ -18,11 +18,12 @@ struct psdd_unique_util{
 
 class PsddUniqueTable{
 public:
-    PsddUniqueTable(size_t vtree_size);
+    void init(size_t vtree_size);
     // It will steal the reference for both node_element and the params
-    PsddNode* create_decn_node(Vtree* v, size_t element_size, PsddNode** elements, PsddParameter* param);
+    PsddNode* create_decn_node(Vtree* v, std::vector<PsddElement>& elements);
     PsddNode* create_literal_node(Vtree* v, size_t var_index, bool lit_sign);
     PsddNode* create_simple_node(Vtree* v, size_t var_index, PsddParameter pos_param, PsddParameter neg_param);
+    std::vector<std::unordered_set<PsddNode*, psdd_unique_util, psdd_unique_util> >& get_unique_table();
 private:
     PsddNode* create_node_helper(PsddNode* to_create);
     size_t m_node_index_acc;
