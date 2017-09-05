@@ -8,3 +8,4 @@ set(SOURCE_FILES src/psdd_node.cpp src/psdd_node.hpp src/vtree.cpp src/vtree.hpp
         src/psdd_unique_table.cpp src/psdd_unique_table.hpp src/uai_network.cpp src/uai_network.hpp
         src/psdd_compiler.cpp src/psdd_compiler.hpp src/psdd_element.cpp src/psdd_element.hpp src/optionparser.h)
 add_executable(psdd ${SOURCE_FILES} src/main.cpp)
+add_executable(arthur ${SOURCE_FILES} src/arthur_main.cpp)

@@ -18,6 +18,7 @@ public:
     PsddParameter operator/(const PsddParameter& other) const;
     PsddParameter operator*(const PsddParameter& other) const;
     double get_parameter_value() const;
+    double get_regular_value() const;
 private:
     PsddParameter(double num);
     double m_param;

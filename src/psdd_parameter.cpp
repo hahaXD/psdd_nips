@@ -53,6 +53,10 @@ bool PsddParameter::operator!=(const PsddParameter &other) const {
     return m_hash_value != other.m_hash_value;
 }
 
+double PsddParameter::get_regular_value() const {
+    return std::exp(m_param);
+}
+
 PsddParameter::PsddParameter():m_param(0){}
 
 
