@@ -45,20 +45,20 @@ struct Arg: public option::Arg
 };
 
 
-enum  optionIndex {UNKNOWN, HELP, VTREE_METHOD, VTREE_INPUT, PSDD_OUTPUT,UAI_FILE, EVID_FILE, PSDD_INPUT, INF_OUTPUT};
+enum  optionIndex {UNKNOWN, HELP, VTREE_METHOD, VTREE_OUTPUT, PSDD_OUTPUT,UAI_FILE, EVID_FILE, PSDD_INPUT, INF_OUTPUT};
 
 const option::Descriptor usage[] =
 {
     {UNKNOWN, 0,"" , ""    ,option::Arg::None, "USAGE: example [options]\n\n \tOptions:"},
     {HELP,    0,"" , "help",option::Arg::None, "--help  \tPrint usage and exit." },
     {VTREE_METHOD, 0,"m", "vtree_method",Arg::Numeric, "--vtree_method, -m  Set vtree method.\n\t0 hyper vtree with random branching factor,\n\t1 hyper vtree generated using fixed branching factor, \n\t4 vtree with minfill." },
-    {VTREE_INPUT, 0, "", "vtree_intput", Arg::Optional, "--vtree_input the vtree_file which will be used for the manuel vtree method"},
+    {VTREE_OUTPUT, 0, "", "vtree_output", Arg::Optional, "--vtree_output output file path for the vtree used for the compilation."},
     {PSDD_OUTPUT, 0, "", "psdd_output", Arg::Optional, "--psdd_output output path of the psdd file for the compiled psdd"},
     {PSDD_INPUT,0, "","psdd_input", Arg::Optional, "--psdd_input input path of the psdd file for evaluation"},
     {UAI_FILE, 0, "", "uai_file", Arg::Optional, "--uai_file uai file path"},
     {EVID_FILE,0, "", "evid_file", Arg::Optional, "--evid_file evid file path"},
     {INF_OUTPUT,0, "", "inf_output", Arg::Required, "--inf_output output file path for inference result"},
-    {UNKNOWN, 0,"" ,  ""   ,option::Arg::None, "\nExamples:\n./compile asia.uai --evid_file=asia.evid -m3 --vtree_input=asia.vtree --psdd_out=asia.psdd"},
+    {UNKNOWN, 0,"" ,  ""   ,option::Arg::None, "\nExamples:\n./psdd --uai_file=asia.uai --evid_file=asia.evid -m3 --vtree_output=asia.vtree --psdd_out=asia.psdd"},
     {0,0,0,0,0,0}
 };
     
@@ -68,7 +68,6 @@ int main(int argc, char* argv[]){
     std::vector<option::Option> options(stats.options_max);
     std::vector<option::Option> buffer(stats.buffer_max);
     option::Parser parse(usage, argc, argv, &options[0], &buffer[0]);
-    
     if (parse.error())
         return 1;
     if (options[HELP] || argc == 0) {
@@ -83,24 +82,19 @@ int main(int argc, char* argv[]){
         return 1;
     }
     pc.read_uai_file(options[UAI_FILE].arg);
-    if (options[VTREE_INPUT]){
-        VtreeManager* vm = new VtreeManager();
-        vm->read_vtree_file(options[VTREE_INPUT].arg);
-        pc.init_psdd_manager_using_vtree_manager(vm);
-        // pc will keep its own copy of vm
-        delete(vm);
-    }else{
-        if (!options[VTREE_METHOD]){
-            std::cerr<< "requires either vtree input file or vtree method. see help" << std::endl;
-            return 1;
-        }
-        pc.init_psdd_manager((char)atoi(options[VTREE_METHOD].arg));
+    if (!options[VTREE_METHOD]){
+      std::cerr<< "requires vtree method. see help" << std::endl;
+      return 1;
     }
+    pc.init_psdd_manager((char)atoi(options[VTREE_METHOD].arg));
     auto result = pc.compile_network(100);
     std::cout << "norm "<< result.second.get_parameter_value() << std::endl;
     if (options[PSDD_OUTPUT]){
         PsddManager::write_psdd_file(result.first, pc.get_psdd_manager()->get_vtree_manager()->get_var_size(),
                                      options[PSDD_OUTPUT].arg);
+    }
+    if (options[VTREE_OUTPUT]){
+      pc.get_psdd_manager()->get_vtree_manager()->write_vtree_file(options[VTREE_OUTPUT].arg);
     }
     /*
     auto result = buce.Compile(uai, evid);
